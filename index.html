@@ -56,7 +56,7 @@
   .stat .v{font-family:"DM Serif Display",serif;font-size:22px;line-height:1.1;}
   .stat .v small{font-family:"DM Sans",sans-serif;font-size:11px;color:var(--muted);font-weight:600;}
   .stat .l{font-size:11px;color:var(--muted);margin-top:4px;letter-spacing:.03em;}
-  .stat .cat{display:inline-block;font-size:11px;font-weight:600;border-radius:8px;padding:2px 7px;margin-top:5px;}
+  .cat{display:inline-block;font-size:11px;font-weight:600;border-radius:8px;padding:2px 7px;margin-top:5px;}
   .cat-zayif{background:#E7EEF6;color:#3A6EA5;}
   .cat-normal{background:var(--green-soft);color:var(--green);}
   .cat-fazla{background:var(--amber-soft);color:#B5701B;}
@@ -106,6 +106,7 @@
   .action{flex:1;min-width:120px;background:transparent;border:1px solid var(--line);border-radius:13px;font:inherit;font-size:14px;font-weight:600;color:var(--ink);padding:12px;cursor:pointer;transition:background .15s;}
   .action:active{background:#F1EADD;}
   .action.primary{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .action.amber{background:var(--amber);color:#fff;border-color:var(--amber);}
 
   .sheet-bg{position:fixed;inset:0;background:rgba(35,32,28,.4);display:none;align-items:flex-end;justify-content:center;z-index:50;}
   .sheet-bg.open{display:flex;}
@@ -121,6 +122,21 @@
   .result-box .note{color:var(--muted);font-size:12.5px;margin-top:8px;}
   .sheet .row{margin-top:16px;}
   .sheet .ghost{flex:0 0 90px;background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:13px;font:inherit;font-weight:600;cursor:pointer;}
+
+  /* Diyet planı */
+  .plan-sum{font-size:13.5px;color:var(--muted);margin:0 0 14px;}
+  .plan-sum b{color:var(--ink);}
+  .meal{border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;background:#FCFAF6;}
+  .meal-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;}
+  .meal-head .mname{font-weight:600;font-size:15px;}
+  .meal-head .mkcal{font-size:13px;color:var(--amber);font-weight:700;}
+  .meal-items{list-style:none;margin:0 0 10px;padding:0;}
+  .meal-items li{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:5px 0;border-bottom:1px dashed var(--line);}
+  .meal-items li:last-child{border-bottom:none;}
+  .meal-items li span.ic{color:var(--muted);font-size:13px;white-space:nowrap;}
+  .meal-add{width:100%;background:#fff;border:1px solid var(--teal);color:var(--teal);border-radius:11px;font:inherit;font-weight:600;font-size:13.5px;padding:9px;cursor:pointer;}
+  .meal-add:active{background:var(--green-soft);}
+  .plan-note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5;}
 </style>
 </head>
 <body>
@@ -163,7 +179,7 @@
   </div>
 
   <div class="setupcard" id="setupCard">
-    <p>Sana özel günlük kalori hedefi ve BMI için kısa bir profil oluştur.</p>
+    <p>Sana özel günlük kalori hedefi, BMI ve diyet planı için kısa bir profil oluştur.</p>
     <button class="add-btn" id="setupBtn" style="max-width:240px;margin:0 auto;display:block;">Profil oluştur</button>
   </div>
 
@@ -192,6 +208,7 @@
   </div>
 
   <div class="actions">
+    <button class="action amber" id="planBtn">Diyet planı</button>
     <button class="action primary" id="weighBtn">Bugünkü kiloyu gir</button>
     <button class="action" id="profileBtn">Profil / Hedef</button>
     <button class="action" id="exportBtn">Yedek al</button>
@@ -252,19 +269,72 @@
   </div>
 </div>
 
+<!-- Diyet planı diyaloğu -->
+<div class="sheet-bg" id="planSheet">
+  <div class="sheet">
+    <h3>Günlük diyet planı</h3>
+    <p class="plan-sum" id="planSum"></p>
+    <div id="planBody"></div>
+    <p class="plan-note">Bu plan, hedef kalorine göre örnek bir dağılımdır; tıbbi diyet yerine geçmez. Beğenmediğin öğünü "Yeniden oluştur" ile değiştirebilirsin.</p>
+    <div class="row">
+      <button class="ghost" id="planClose">Kapat</button>
+      <button class="add-btn" id="planRegen">Yeniden oluştur</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const KEY="nsKaloriV2";
 const RING_CIRC=289;
 let state=load();
 let viewDate=todayStr();
 
+/* --- Yemek bankası (porsiyon başı tahmini kcal) --- */
+const BANK={
+  kahvalti:[
+    {ad:"2 haşlanmış yumurta",kcal:140},{ad:"Menemen (2 yumurta)",kcal:220},
+    {ad:"Beyaz peynir (50 g)",kcal:130},{ad:"Kaşar peyniri (40 g)",kcal:130},
+    {ad:"5-6 zeytin",kcal:50},{ad:"1 dilim tam buğday ekmeği",kcal:70},
+    {ad:"1 dilim çavdar ekmeği",kcal:65},{ad:"Domates-salatalık tabağı",kcal:35},
+    {ad:"1 tatlı kaşığı bal",kcal:40},{ad:"5 adet ceviz içi",kcal:130},
+    {ad:"Yulaf ezmesi sütle (40 g)",kcal:220},{ad:"1 bardak süt",kcal:120},
+    {ad:"1 kase yoğurt",kcal:90},{ad:"Yarım avokado",kcal:120},{ad:"Lor peyniri (50 g)",kcal:70}
+  ],
+  ogle:[
+    {ad:"Mercimek çorbası (1 kase)",kcal:150},{ad:"Izgara tavuk göğsü (150 g)",kcal:250},
+    {ad:"Bulgur pilavı (1 porsiyon)",kcal:220},{ad:"Etli nohut (1 porsiyon)",kcal:280},
+    {ad:"Zeytinyağlı taze fasulye",kcal:180},{ad:"Sebzeli tavuk sote",kcal:260},
+    {ad:"Karışık salata (yağsız)",kcal:60},{ad:"1 kase yoğurt",kcal:90},
+    {ad:"Tam buğday makarna (1 porsiyon)",kcal:280},{ad:"Izgara köfte (4 adet)",kcal:300},
+    {ad:"Fırın sebze",kcal:150},{ad:"1 bardak ayran",kcal:60},{ad:"Etli kuru fasulye",kcal:300}
+  ],
+  aksam:[
+    {ad:"Izgara balık (150 g)",kcal:220},{ad:"Sebze çorbası (1 kase)",kcal:110},
+    {ad:"Zeytinyağlı enginar",kcal:160},{ad:"Izgara tavuk but",kcal:240},
+    {ad:"Kıymalı sebze yemeği",kcal:250},{ad:"Yeşil salata",kcal:50},
+    {ad:"1 kase yoğurt",kcal:90},{ad:"Fırın somon (120 g)",kcal:250},
+    {ad:"Mercimek köftesi (4 adet)",kcal:180},{ad:"Cacık (1 kase)",kcal:70},{ad:"Etli türlü",kcal:240}
+  ],
+  ara:[
+    {ad:"1 elma",kcal:80},{ad:"1 muz",kcal:105},{ad:"1 portakal",kcal:60},
+    {ad:"1 kase yoğurt",kcal:90},{ad:"1 avuç badem (15 adet)",kcal:100},
+    {ad:"1 bardak kefir",kcal:90},{ad:"1 dilim kavun",kcal:50},
+    {ad:"2 adet kuru kayısı",kcal:40},{ad:"Bir avuç fındık",kcal:110},{ad:"Yarım kase çilek",kcal:30}
+  ]
+};
+const MEAL_DEFS=[
+  {key:"kahvalti",ad:"Kahvaltı",pct:0.25},
+  {key:"ogle",ad:"Öğle",pct:0.35},
+  {key:"aksam",ad:"Akşam",pct:0.30},
+  {key:"ara",ad:"Ara öğün",pct:0.10}
+];
+
 function load(){
   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&typeof d==="object")return normalize(d);}catch(e){}
-  // eski v1 verisini taşı
   try{const o=JSON.parse(localStorage.getItem("nsKaloriV1"));if(o&&typeof o==="object")return normalize({gunler:o.gunler||{}});}catch(e){}
-  return {profil:null,kiloGecmisi:[],gunler:{}};
+  return {profil:null,kiloGecmisi:[],gunler:{},diyetPlan:null};
 }
-function normalize(d){return {profil:d.profil||null,kiloGecmisi:Array.isArray(d.kiloGecmisi)?d.kiloGecmisi:[],gunler:d.gunler||{}};}
+function normalize(d){return {profil:d.profil||null,kiloGecmisi:Array.isArray(d.kiloGecmisi)?d.kiloGecmisi:[],gunler:d.gunler||{},diyetPlan:d.diyetPlan||null};}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){alert("Kaydedilemedi. Tarayıcı depolaması kapalı olabilir.");}}
 
 function todayStr(){return dateStr(new Date());}
@@ -276,22 +346,14 @@ function relativeLabel(str){if(str===todayStr())return "Bugün";if(str===shiftDa
 function entriesFor(str){return state.gunler[str]||[];}
 function totalFor(str){return entriesFor(str).reduce((s,e)=>s+(Number(e.kalori)||0),0);}
 
-// --- Hesaplamalar ---
 function bmr(p){const base=10*p.kilo+6.25*p.boy-5*p.yas;return p.cinsiyet==="erkek"?base+5:base-161;}
 function tdee(p){return bmr(p)*parseFloat(p.aktivite);}
-function dailyTarget(p){
-  const floor=p.cinsiyet==="erkek"?1500:1200;
-  let t=tdee(p)-parseFloat(p.tempo);
-  let limited=false;
-  if(t<floor){t=floor;limited=true;}
-  return {target:Math.round(t),limited:limited,floor:floor};
-}
+function dailyTarget(p){const floor=p.cinsiyet==="erkek"?1500:1200;let t=tdee(p)-parseFloat(p.tempo);let limited=false;if(t<floor){t=floor;limited=true;}return {target:Math.round(t),limited:limited,floor:floor};}
 function bmiValue(p){const m=p.boy/100;return p.kilo/(m*m);}
 function bmiCat(b){if(b<18.5)return {t:"Zayıf",c:"cat-zayif"};if(b<25)return {t:"Normal",c:"cat-normal"};if(b<30)return {t:"Fazla kilolu",c:"cat-fazla"};return {t:"Obez",c:"cat-obez"};}
 
 function render(){
   const p=state.profil;
-
   document.getElementById("dayBig").textContent=relativeLabel(viewDate);
   document.getElementById("daySub").textContent=prettyDate(viewDate);
   document.getElementById("nextDay").disabled=(viewDate>=todayStr());
@@ -308,7 +370,7 @@ function render(){
   warn.classList.remove("show");ok.classList.remove("show");
 
   let target=null;
-  if(p){const dt=dailyTarget(p);target=dt.target;}
+  if(p){target=dailyTarget(p).target;}
 
   if(target){
     const r=total/target;
@@ -325,32 +387,25 @@ function render(){
     }
   }else{
     ring.style.strokeDashoffset=RING_CIRC;
-    pct.textContent="&mdash;";pct.innerHTML="&mdash;";
+    pct.innerHTML="&mdash;";
     unit.textContent="hedef yok";
     goalLine.textContent="Henüz profil oluşturmadın";
   }
 
-  // Stat satırı
   const stats=document.getElementById("statsRow");
   const setup=document.getElementById("setupCard");
   if(p){
-    setup.classList.add("hidden");
-    stats.classList.remove("locked");
+    setup.classList.add("hidden");stats.classList.remove("locked");
     const b=bmiValue(p);const bc=bmiCat(b);
     document.getElementById("bmiVal").textContent=b.toFixed(1);
     document.getElementById("bmiCat").innerHTML="<span class='cat "+bc.c+"'>"+bc.t+"</span>";
     document.getElementById("targetVal").innerHTML=target+"<small> kcal</small>";
-    const kalan=target-total;
-    const remEl=document.getElementById("remVal");
+    const kalan=target-total;const remEl=document.getElementById("remVal");
     if(kalan>=0){remEl.textContent=kalan;remEl.style.color="var(--ink)";document.getElementById("remLbl").textContent="Kalan kcal";}
     else{remEl.textContent="+"+(-kalan);remEl.style.color="var(--over)";document.getElementById("remLbl").textContent="Aşılan kcal";}
-  }else{
-    setup.classList.remove("hidden");
-    stats.classList.add("locked");
-  }
+  }else{setup.classList.remove("hidden");stats.classList.add("locked");}
 
-  renderEntries();
-  renderWeight();
+  renderEntries();renderWeight();
 }
 
 function renderEntries(){
@@ -358,11 +413,7 @@ function renderEntries(){
   const items=entriesFor(viewDate);
   document.getElementById("entryCount").textContent=items.length?items.length+" kayıt":"";
   list.innerHTML="";
-  if(items.length===0){
-    const li=document.createElement("li");li.className="empty";
-    li.textContent="Bu gün için henüz kayıt yok. Yukarıdan ekleyebilirsin.";
-    list.appendChild(li);return;
-  }
+  if(items.length===0){const li=document.createElement("li");li.className="empty";li.textContent="Bu gün için henüz kayıt yok. Yukarıdan ekleyebilirsin.";list.appendChild(li);return;}
   items.forEach(e=>{
     const li=document.createElement("li");
     const main=document.createElement("div");main.className="entry-main";
@@ -383,11 +434,7 @@ function renderWeight(){
   card.classList.remove("hidden");
   const last=hist[hist.length-1];
   let nowHtml="Güncel <b>"+last.kilo+" kg</b>";
-  if(state.profil&&state.profil.hedefKilo){
-    const fark=(last.kilo-state.profil.hedefKilo);
-    if(fark>0.05)nowHtml+=" &bull; hedefe <b>"+fark.toFixed(1)+" kg</b>";
-    else nowHtml+=" &bull; <b>hedefe ulaşıldı</b>";
-  }
+  if(state.profil&&state.profil.hedefKilo){const fark=(last.kilo-state.profil.hedefKilo);if(fark>0.05)nowHtml+=" &bull; hedefe <b>"+fark.toFixed(1)+" kg</b>";else nowHtml+=" &bull; <b>hedefe ulaşıldı</b>";}
   document.getElementById("weightNow").innerHTML=nowHtml;
   document.getElementById("weightChart").innerHTML=buildChart(hist);
 }
@@ -395,7 +442,6 @@ function renderWeight(){
 function buildChart(hist){
   if(hist.length<2){return "<div style='color:var(--muted);font-size:13px;padding:6px 0;'>İlerleme grafiği için en az iki ölçüm gerekir.</div>";}
   const W=480,H=120,padL=8,padR=8,padT=14,padB=18;
-  const xs=hist.map((h,i)=>i);
   const ys=hist.map(h=>h.kilo);
   let minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
   if(state.profil&&state.profil.hedefKilo){minY=Math.min(minY,state.profil.hedefKilo);maxY=Math.max(maxY,state.profil.hedefKilo);}
@@ -407,151 +453,131 @@ function buildChart(hist){
   let dots=hist.map((h,i)=>"<circle cx='"+x(i).toFixed(1)+"' cy='"+y(h.kilo).toFixed(1)+"' r='3' fill='#1F6F6B'/>").join("");
   let goalLine="";
   if(state.profil&&state.profil.hedefKilo){const gy=y(state.profil.hedefKilo);goalLine="<line x1='"+padL+"' y1='"+gy.toFixed(1)+"' x2='"+(W-padR)+"' y2='"+gy.toFixed(1)+"' stroke='#3F8F5B' stroke-width='1.5' stroke-dasharray='5 4'/><text x='"+(W-padR)+"' y='"+(gy-5).toFixed(1)+"' text-anchor='end' font-size='11' fill='#3F8F5B'>hedef "+state.profil.hedefKilo+"</text>";}
-  const first=hist[0].kilo,lastK=hist[hist.length-1].kilo;
-  const startLbl="<text x='"+padL+"' y='"+(H-4)+"' font-size='11' fill='#8A8175'>"+first+" kg</text>";
-  const endLbl="<text x='"+(W-padR)+"' y='"+(H-4)+"' text-anchor='end' font-size='11' fill='#8A8175'>"+lastK+" kg</text>";
+  const startLbl="<text x='"+padL+"' y='"+(H-4)+"' font-size='11' fill='#8A8175'>"+hist[0].kilo+" kg</text>";
+  const endLbl="<text x='"+(W-padR)+"' y='"+(H-4)+"' text-anchor='end' font-size='11' fill='#8A8175'>"+hist[hist.length-1].kilo+" kg</text>";
   return "<svg viewBox='0 0 "+W+" "+H+"' width='100%' preserveAspectRatio='xMidYMid meet'>"+goalLine+"<polyline points='"+pts+"' fill='none' stroke='#1F6F6B' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>"+dots+startLbl+endLbl+"</svg>";
 }
 
 function addEntry(){
-  const nameEl=document.getElementById("foodName");
-  const kcalEl=document.getElementById("foodKcal");
-  const ad=nameEl.value.trim();
-  const kalori=parseInt(kcalEl.value,10);
-  if(!ad){nameEl.focus();return;}
-  if(isNaN(kalori)||kalori<0){kcalEl.focus();return;}
-  const now=new Date();
-  const saat=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  const nameEl=document.getElementById("foodName");const kcalEl=document.getElementById("foodKcal");
+  const ad=nameEl.value.trim();const kalori=parseInt(kcalEl.value,10);
+  if(!ad){nameEl.focus();return;}if(isNaN(kalori)||kalori<0){kcalEl.focus();return;}
+  pushEntry(ad,kalori);nameEl.value="";kcalEl.value="";nameEl.focus();render();
+}
+function pushEntry(ad,kalori){
+  const now=new Date();const saat=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
   if(!state.gunler[viewDate])state.gunler[viewDate]=[];
   state.gunler[viewDate].push({id:Date.now()+"-"+Math.random().toString(36).slice(2,7),ad,kalori,saat});
-  save();nameEl.value="";kcalEl.value="";nameEl.focus();render();
+  save();
 }
-function removeEntry(id){
-  const arr=state.gunler[viewDate];if(!arr)return;
-  state.gunler[viewDate]=arr.filter(e=>e.id!==id);
-  if(state.gunler[viewDate].length===0)delete state.gunler[viewDate];
-  save();render();
-}
+function removeEntry(id){const arr=state.gunler[viewDate];if(!arr)return;state.gunler[viewDate]=arr.filter(e=>e.id!==id);if(state.gunler[viewDate].length===0)delete state.gunler[viewDate];save();render();}
 
-// Olaylar
 document.getElementById("addBtn").onclick=addEntry;
 document.getElementById("foodKcal").addEventListener("keydown",e=>{if(e.key==="Enter")addEntry();});
 document.getElementById("foodName").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("foodKcal").focus();});
 document.getElementById("prevDay").onclick=()=>{viewDate=shiftDate(viewDate,-1);render();};
 document.getElementById("nextDay").onclick=()=>{if(viewDate<todayStr()){viewDate=shiftDate(viewDate,1);render();}};
 
-// Profil
+/* --- Profil --- */
 const profileSheet=document.getElementById("profileSheet");
 function openProfile(){
   const p=state.profil;
-  if(p){
-    document.getElementById("pCinsiyet").value=p.cinsiyet;
-    document.getElementById("pYas").value=p.yas;
-    document.getElementById("pBoy").value=p.boy;
-    document.getElementById("pKilo").value=p.kilo;
-    document.getElementById("pHedefKilo").value=p.hedefKilo||"";
-    document.getElementById("pAktivite").value=p.aktivite;
-    document.getElementById("pTempo").value=p.tempo;
-  }
-  updateProfilePreview();
-  profileSheet.classList.add("open");
+  if(p){document.getElementById("pCinsiyet").value=p.cinsiyet;document.getElementById("pYas").value=p.yas;document.getElementById("pBoy").value=p.boy;document.getElementById("pKilo").value=p.kilo;document.getElementById("pHedefKilo").value=p.hedefKilo||"";document.getElementById("pAktivite").value=p.aktivite;document.getElementById("pTempo").value=p.tempo;}
+  updateProfilePreview();profileSheet.classList.add("open");
 }
 function readProfileForm(){
   const cinsiyet=document.getElementById("pCinsiyet").value;
   const yas=parseInt(document.getElementById("pYas").value,10);
   const boy=parseFloat(document.getElementById("pBoy").value);
   const kilo=parseFloat(document.getElementById("pKilo").value);
-  const hk=document.getElementById("pHedefKilo").value;
-  const hedefKilo=hk===""?null:parseFloat(hk);
-  const aktivite=document.getElementById("pAktivite").value;
-  const tempo=document.getElementById("pTempo").value;
+  const hk=document.getElementById("pHedefKilo").value;const hedefKilo=hk===""?null:parseFloat(hk);
+  const aktivite=document.getElementById("pAktivite").value;const tempo=document.getElementById("pTempo").value;
   if(isNaN(yas)||isNaN(boy)||isNaN(kilo)||yas<14||boy<120||kilo<30)return null;
   return {cinsiyet,yas,boy,kilo,hedefKilo,aktivite,tempo};
 }
 function updateProfilePreview(){
-  const box=document.getElementById("profileResult");
-  const p=readProfileForm();
+  const box=document.getElementById("profileResult");const p=readProfileForm();
   if(!p){box.style.display="none";return;}
-  const dt=dailyTarget(p);
-  const b=bmiValue(p);const bc=bmiCat(b);
-  let html="Günlük hedefin: <span class='big-target'>"+dt.target+"</span> kcal<br>";
-  html+="BMI: <b>"+b.toFixed(1)+"</b> ("+bc.t+")";
+  const dt=dailyTarget(p);const b=bmiValue(p);const bc=bmiCat(b);
+  let html="Günlük hedefin: <span class='big-target'>"+dt.target+"</span> kcal<br>BMI: <b>"+b.toFixed(1)+"</b> ("+bc.t+")";
   if(p.hedefKilo&&p.hedefKilo<p.kilo&&parseFloat(p.tempo)>0){
     const effDeficit=Math.round(tdee(p))-dt.target;
-    if(effDeficit>0){
-      const weekly=effDeficit*7/7700;
-      const weeks=Math.ceil((p.kilo-p.hedefKilo)/weekly);
-      html+="<br>Hedef kiloya tahmini süre: <b>~"+weeks+" hafta</b>";
-    }
+    if(effDeficit>0){const weekly=effDeficit*7/7700;const weeks=Math.ceil((p.kilo-p.hedefKilo)/weekly);html+="<br>Hedef kiloya tahmini süre: <b>~"+weeks+" hafta</b>";}
   }
   let note="Bu değerler Mifflin-St Jeor formülüyle hesaplanan tahmindir.";
   if(dt.limited)note="Seçtiğin tempo sağlıklı alt sınırın altına indiği için hedef "+dt.floor+" kcal'e sabitlendi. Daha düşük kalori önerilmez.";
-  html+="<div class='note'>"+note+"</div>";
-  box.innerHTML=html;box.style.display="block";
+  html+="<div class='note'>"+note+"</div>";box.innerHTML=html;box.style.display="block";
 }
-["pCinsiyet","pYas","pBoy","pKilo","pHedefKilo","pAktivite","pTempo"].forEach(id=>{
-  document.getElementById(id).addEventListener("input",updateProfilePreview);
-  document.getElementById(id).addEventListener("change",updateProfilePreview);
-});
+["pCinsiyet","pYas","pBoy","pKilo","pHedefKilo","pAktivite","pTempo"].forEach(id=>{document.getElementById(id).addEventListener("input",updateProfilePreview);document.getElementById(id).addEventListener("change",updateProfilePreview);});
 document.getElementById("profileBtn").onclick=openProfile;
 document.getElementById("setupBtn").onclick=openProfile;
 document.getElementById("profileCancel").onclick=()=>profileSheet.classList.remove("open");
 profileSheet.addEventListener("click",e=>{if(e.target===profileSheet)profileSheet.classList.remove("open");});
 document.getElementById("profileSave").onclick=()=>{
-  const p=readProfileForm();
-  if(!p){alert("Lütfen yaş, boy ve kiloyu doğru gir.");return;}
-  const prevKilo=state.profil?state.profil.kilo:null;
-  state.profil=p;
-  // kiloyu geçmişe işle (bugün için)
+  const p=readProfileForm();if(!p){alert("Lütfen yaş, boy ve kiloyu doğru gir.");return;}
+  const prevKilo=state.profil?state.profil.kilo:null;state.profil=p;
   if(prevKilo!==p.kilo||state.kiloGecmisi.length===0){logWeight(p.kilo);}
+  state.diyetPlan=null; // hedef değişti, plan yenilensin
   save();profileSheet.classList.remove("open");render();
 };
 
-// Kilo girme
-function logWeight(kg){
-  const t=todayStr();
-  const idx=state.kiloGecmisi.findIndex(h=>h.tarih===t);
-  if(idx>=0)state.kiloGecmisi[idx].kilo=kg;
-  else state.kiloGecmisi.push({tarih:t,kilo:kg});
-}
+/* --- Kilo --- */
+function logWeight(kg){const t=todayStr();const idx=state.kiloGecmisi.findIndex(h=>h.tarih===t);if(idx>=0)state.kiloGecmisi[idx].kilo=kg;else state.kiloGecmisi.push({tarih:t,kilo:kg});}
 const weightSheet=document.getElementById("weightSheet");
-document.getElementById("weighBtn").onclick=()=>{
-  const last=state.kiloGecmisi.length?state.kiloGecmisi[state.kiloGecmisi.length-1].kilo:(state.profil?state.profil.kilo:"");
-  document.getElementById("weightInput").value=last||"";
-  weightSheet.classList.add("open");
-  document.getElementById("weightInput").focus();
-};
+document.getElementById("weighBtn").onclick=()=>{const last=state.kiloGecmisi.length?state.kiloGecmisi[state.kiloGecmisi.length-1].kilo:(state.profil?state.profil.kilo:"");document.getElementById("weightInput").value=last||"";weightSheet.classList.add("open");document.getElementById("weightInput").focus();};
 document.getElementById("weightCancel").onclick=()=>weightSheet.classList.remove("open");
 weightSheet.addEventListener("click",e=>{if(e.target===weightSheet)weightSheet.classList.remove("open");});
 document.getElementById("weightSave").onclick=()=>{
   const kg=parseFloat(document.getElementById("weightInput").value.replace(",","."));
   if(isNaN(kg)||kg<30||kg>300){alert("Geçerli bir kilo gir.");return;}
-  logWeight(kg);
-  if(state.profil)state.profil.kilo=kg; // güncel kilo profile yansısın (BMI/hedef güncellensin)
-  save();weightSheet.classList.remove("open");render();
+  logWeight(kg);if(state.profil)state.profil.kilo=kg;save();weightSheet.classList.remove("open");render();
 };
 
-// Yedek
-document.getElementById("exportBtn").onclick=()=>{
-  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);const a=document.createElement("a");
-  a.href=url;a.download="kalori-yedek-"+todayStr()+".json";
-  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+/* --- Diyet planı --- */
+function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function genMeal(pool,budget){
+  const sh=shuffle(pool);const res=[];let sum=0;
+  for(const it of sh){
+    if(sum>=budget*0.9)break;
+    if(sum+it.kcal<=budget*1.18){res.push(it);sum+=it.kcal;}
+  }
+  if(res.length===0){const m=pool.slice().sort((a,b)=>a.kcal-b.kcal)[0];res.push(m);sum=m.kcal;}
+  return {items:res,toplam:sum};
+}
+function generatePlan(){
+  const target=dailyTarget(state.profil).target;
+  const ogunler=MEAL_DEFS.map(def=>{const budget=Math.round(target*def.pct);const g=genMeal(BANK[def.key],budget);return {ad:def.ad,key:def.key,hedef:budget,items:g.items,toplam:g.toplam};});
+  state.diyetPlan={tarih:todayStr(),target:target,ogunler:ogunler};save();
+}
+function renderPlan(){
+  const body=document.getElementById("planBody");const sum=document.getElementById("planSum");
+  const pl=state.diyetPlan;const planTotal=pl.ogunler.reduce((s,o)=>s+o.toplam,0);
+  sum.innerHTML="Günlük hedef <b>"+pl.target+" kcal</b> &bull; bu plan toplam <b>"+planTotal+" kcal</b>";
+  body.innerHTML="";
+  pl.ogunler.forEach((o,oi)=>{
+    const div=document.createElement("div");div.className="meal";
+    let itemsHtml=o.items.map(it=>"<li><span>"+it.ad+"</span><span class='ic'>"+it.kcal+" kcal</span></li>").join("");
+    div.innerHTML="<div class='meal-head'><span class='mname'>"+o.ad+"</span><span class='mkcal'>"+o.toplam+" / "+o.hedef+" kcal</span></div><ul class='meal-items'>"+itemsHtml+"</ul><button class='meal-add' data-oi='"+oi+"'>Bu öğünü günlüğe ekle</button>";
+    body.appendChild(div);
+  });
+  body.querySelectorAll(".meal-add").forEach(btn=>{btn.onclick=()=>{const oi=parseInt(btn.getAttribute("data-oi"),10);const o=state.diyetPlan.ogunler[oi];o.items.forEach(it=>pushEntry(o.ad+": "+it.ad,it.kcal));render();btn.textContent="Eklendi ✓";btn.style.background="var(--green-soft)";setTimeout(()=>{btn.textContent="Bu öğünü günlüğe ekle";btn.style.background="#fff";},1400);};});
+}
+const planSheet=document.getElementById("planSheet");
+document.getElementById("planBtn").onclick=()=>{
+  if(!state.profil){alert("Diyet planı için önce profil oluştur (Profil / Hedef).");openProfile();return;}
+  if(!state.diyetPlan||state.diyetPlan.tarih!==todayStr())generatePlan();
+  renderPlan();planSheet.classList.add("open");
 };
+document.getElementById("planRegen").onclick=()=>{generatePlan();renderPlan();};
+document.getElementById("planClose").onclick=()=>planSheet.classList.remove("open");
+planSheet.addEventListener("click",e=>{if(e.target===planSheet)planSheet.classList.remove("open");});
+
+/* --- Yedek --- */
+document.getElementById("exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="kalori-yedek-"+todayStr()+".json";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);};
 document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
 document.getElementById("importFile").onchange=(ev)=>{
-  const f=ev.target.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{
-    try{
-      const d=JSON.parse(r.result);
-      if(!d||typeof d!=="object"||typeof d.gunler!=="object")throw new Error();
-      if(confirm("Yedek yüklenecek ve şu anki kayıtların üzerine yazılacak. Devam edilsin mi?")){
-        state=normalize(d);save();render();alert("Yedek yüklendi.");
-      }
-    }catch(e){alert("Dosya okunamadı. Geçerli bir yedek dosyası seç.");}
-    ev.target.value="";
-  };
+  const f=ev.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||typeof d!=="object"||typeof d.gunler!=="object")throw new Error();if(confirm("Yedek yüklenecek ve şu anki kayıtların üzerine yazılacak. Devam edilsin mi?")){state=normalize(d);save();render();alert("Yedek yüklendi.");}}catch(e){alert("Dosya okunamadı. Geçerli bir yedek dosyası seç.");}ev.target.value="";};
   r.readAsText(f);
 };
 
